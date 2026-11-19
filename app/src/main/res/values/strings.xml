@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Simple TV</string>
+    <string name="search_hint">Search channels</string>
+    <string name="no_channels">No channels found in the playlist.</string>
+    <string name="load_failed">Failed to load channels.\n%1$s\n\nTap here to retry.</string>
+    <string name="cannot_play">Cannot play this channel (%1$s)</string>
+</resources>
