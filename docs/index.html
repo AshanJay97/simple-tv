@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simple TV</title>
+<meta name="description" content="A lightweight in-browser IPTV player with search, group filter and hls.js playback.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231f6feb'%3E%3Cpath d='M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --panel-2:#eef1f6; --border:#dde2ea;
+    --fg:#10151c; --muted:#5c6673; --accent:#1f6feb; --accent-fg:#ffffff;
+    --danger:#c0392b; --ok:#1a7f4b;
+    --brand:"Space Grotesk",system-ui,sans-serif;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0e1116; --panel:#161b22; --panel-2:#1c222b; --border:#2a313c;
+    --fg:#e6edf3; --muted:#9aa4b2; --accent:#4b9bff; --accent-fg:#06121f;
+    --danger:#ff6b6b; --ok:#54d394; color-scheme:dark;
+  }}
+  html,body{height:100%}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--ui);
+    display:flex;flex-direction:column;overflow:hidden}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+
+  header{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;
+    padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));
+    background:var(--panel);border-bottom:1px solid var(--border);flex:none}
+  .brand{display:flex;align-items:center;gap:9px;font-family:var(--brand);font-weight:700;
+    font-size:1.15rem;letter-spacing:.2px;margin-right:4px}
+  .brand svg{width:22px;height:22px;color:var(--accent)}
+  .controls{display:flex;gap:10px;flex:1 1 320px;min-width:0;flex-wrap:wrap}
+  input,select{font:inherit;color:var(--fg);background:var(--panel-2);
+    border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;min-width:0}
+  #search{flex:1 1 200px}
+  select{flex:0 1 220px;cursor:pointer}
+  .count{color:var(--muted);font-size:.82rem;white-space:nowrap}
+
+  main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(260px,340px) 1fr}
+  @media (max-width:760px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
+
+  #list{overflow-y:auto;border-right:1px solid var(--border);background:var(--panel);
+    padding:8px;display:flex;flex-direction:column;gap:6px}
+  @media (max-width:760px){#list{border-right:none;border-top:1px solid var(--border);order:2;max-height:45vh}}
+  .row{display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;
+    background:var(--panel-2);border:1px solid transparent;border-radius:var(--radius);
+    padding:9px 11px;color:inherit;font:inherit}
+  .row:hover{border-color:var(--border)}
+  .row:focus-visible,.row.active{outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 40%,transparent)}
+  .row.active{background:color-mix(in srgb,var(--accent) 14%,var(--panel-2))}
+  .logo{width:44px;height:44px;flex:none;border-radius:7px;object-fit:contain;
+    background:#00000014;padding:3px}
+  @media (prefers-color-scheme:dark){.logo{background:#ffffff10}}
+  .meta{min-width:0;display:flex;flex-direction:column;gap:2px}
+  .nm{font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gp{color:var(--muted);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .warn{display:inline-block;font-size:.68rem;color:var(--danger);
+    border:1px solid currentColor;border-radius:5px;padding:0 4px;margin-left:6px;vertical-align:middle}
+  .hint{color:var(--muted);font-size:.8rem;text-align:center;padding:10px}
+
+  .stage{min-width:0;display:flex;flex-direction:column;background:#000}
+  .videowrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;position:relative}
+  video{width:100%;height:100%;max-height:100%;background:#000}
+  .placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:10px;color:#9aa4b2;text-align:center;padding:24px}
+  .placeholder svg{width:54px;height:54px;opacity:.6}
+  .nowbar{flex:none;display:flex;align-items:center;gap:10px;background:var(--panel);
+    border-top:1px solid var(--border);color:var(--fg);
+    padding:10px max(14px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+  .nowbar .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+  .nowbar.live .dot{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 30%,transparent)}
+  #nowTitle{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .msg{color:var(--danger);font-size:.85rem;text-align:center;padding:0 16px 10px}
+  .spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;
+    animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+  .loadscreen{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);gap:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
+    Simple TV
+  </div>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Search channels…" autocomplete="off" aria-label="Search channels">
+    <select id="group" aria-label="Filter by group"><option value="">All groups</option></select>
+  </div>
+  <span class="count" id="count"></span>
+</header>
+
+<main>
+  <div id="list" role="listbox" aria-label="Channels">
+    <div class="loadscreen" id="loading"><span class="spin"></span> Loading channels…</div>
+  </div>
+
+  <section class="stage">
+    <div class="videowrap">
+      <video id="video" controls playsinline></video>
+      <div class="placeholder" id="placeholder">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
+        <div>Pick a channel to start watching</div>
+      </div>
+    </div>
+    <div class="nowbar" id="nowbar">
+      <span class="dot"></span>
+      <span id="nowTitle">Nothing playing</span>
+    </div>
+    <div class="msg" id="msg" hidden></div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var PLAYLIST="https://romaxa55.github.io/world_ip_tv/output/index.m3u";
+  var MAX_RENDER=600;
+  var channels=[], filtered=[], activeBtn=null, hls=null;
+
+  var listEl=document.getElementById("list");
+  var loadingEl=document.getElementById("loading");
+  var searchEl=document.getElementById("search");
+  var groupEl=document.getElementById("group");
+  var countEl=document.getElementById("count");
+  var video=document.getElementById("video");
+  var placeholder=document.getElementById("placeholder");
+  var nowbar=document.getElementById("nowbar");
+  var nowTitle=document.getElementById("nowTitle");
+  var msgEl=document.getElementById("msg");
+  var isHttps=location.protocol==="https:";
+
+  function parseM3U(text){
+    var lines=text.split(/\r?\n/), out=[], name=null, logo=null, group=null, i, raw, m, c;
+    for(i=0;i<lines.length;i++){
+      raw=lines[i].trim();
+      if(!raw) continue;
+      if(/^#EXTINF/i.test(raw)){
+        m=raw.match(/tvg-logo="([^"]*)"/i); logo=m?m[1]:null;
+        m=raw.match(/group-title="([^"]*)"/i); group=m?m[1]:null;
+        c=raw.lastIndexOf(","); name=c>=0?raw.slice(c+1).trim():"Channel";
+      } else if(raw.charAt(0)==="#"){
+        if(/^#EXTGRP:/i.test(raw)) group=raw.slice(8).trim();
+      } else if(name){
+        out.push({name:name,url:raw,logo:logo||null,group:group||null});
+        name=null; logo=null; group=null;
+      }
+    }
+    return out;
+  }
+
+  function buildGroups(){
+    var seen={}, groups=[], i, g;
+    for(i=0;i<channels.length;i++){ g=channels[i].group; if(g&&!seen[g]){seen[g]=1;groups.push(g);} }
+    groups.sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1;});
+    var frag=document.createDocumentFragment();
+    for(i=0;i<groups.length;i++){ var o=document.createElement("option"); o.value=groups[i]; o.textContent=groups[i]; frag.appendChild(o); }
+    groupEl.appendChild(frag);
+  }
+
+  function applyFilter(){
+    var q=searchEl.value.trim().toLowerCase(), g=groupEl.value;
+    filtered=channels.filter(function(c){
+      if(g && c.group!==g) return false;
+      if(q){
+        var hay=c.name.toLowerCase()+" "+(c.group?c.group.toLowerCase():"");
+        if(hay.indexOf(q)===-1) return false;
+      }
+      return true;
+    });
+    render();
+  }
+
+  function render(){
+    listEl.textContent="";
+    var total=filtered.length, shown=Math.min(total,MAX_RENDER), frag=document.createDocumentFragment(), i;
+    for(i=0;i<shown;i++) frag.appendChild(rowFor(filtered[i]));
+    listEl.appendChild(frag);
+    if(total>shown){
+      var h=document.createElement("div"); h.className="hint";
+      h.textContent="Showing first "+shown+" of "+total+" — type to narrow the list.";
+      listEl.appendChild(h);
+    }
+    if(total===0){
+      var e=document.createElement("div"); e.className="hint"; e.textContent="No channels match.";
+      listEl.appendChild(e);
+    }
+    countEl.textContent=total.toLocaleString()+" channel"+(total===1?"":"s");
+  }
+
+  function rowFor(ch){
+    var b=document.createElement("button");
+    b.className="row"; b.type="button"; b.setAttribute("role","option");
+    var blocked=isHttps && ch.url.slice(0,7)==="http://";
+
+    var img=document.createElement("img");
+    img.className="logo"; img.loading="lazy"; img.alt="";
+    img.src=ch.logo||FALLBACK;
+    img.onerror=function(){this.onerror=null;this.src=FALLBACK;};
+    b.appendChild(img);
+
+    var meta=document.createElement("div"); meta.className="meta";
+    var nm=document.createElement("div"); nm.className="nm"; nm.textContent=ch.name;
+    if(blocked){ var w=document.createElement("span"); w.className="warn"; w.textContent="http"; w.title="Streams over http — blocked in a secure web page. Use the Android app."; nm.appendChild(w); }
+    meta.appendChild(nm);
+    if(ch.group){ var gp=document.createElement("div"); gp.className="gp"; gp.textContent=ch.group; meta.appendChild(gp); }
+    b.appendChild(meta);
+
+    b.addEventListener("click",function(){ selectRow(b); play(ch,blocked); });
+    return b;
+  }
+
+  function selectRow(btn){ if(activeBtn) activeBtn.classList.remove("active"); activeBtn=btn; btn.classList.add("active"); }
+
+  function showMsg(t){ msgEl.textContent=t; msgEl.hidden=!t; }
+
+  function play(ch,blocked){
+    placeholder.hidden=true;
+    nowTitle.textContent=ch.name;
+    nowbar.classList.remove("live");
+    showMsg("");
+    if(hls){ try{hls.destroy();}catch(e){} hls=null; }
+
+    if(blocked){
+      showMsg("This channel streams over http, which the browser blocks on a secure page. It plays fine in the Android app.");
+      nowTitle.textContent=ch.name+" — unavailable in browser";
+      return;
+    }
+
+    var onPlaying=function(){ nowbar.classList.add("live"); };
+    video.oncanplay=onPlaying; video.onplaying=onPlaying;
+
+    if(video.canPlayType("application/vnd.apple.mpegurl")){
+      video.src=ch.url;
+      video.play().catch(function(){});
+      video.onerror=function(){ showMsg("Could not play this channel. It may be offline, region-locked, or blocking web playback — try another."); };
+    } else if(window.Hls && Hls.isSupported()){
+      hls=new Hls({maxBufferLength:30,manifestLoadingTimeOut:12000});
+      hls.loadSource(ch.url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED,function(){ video.play().catch(function(){}); });
+      hls.on(Hls.Events.ERROR,function(ev,data){
+        if(data && data.fatal){
+          showMsg("Could not play this channel. It may be offline, region-locked, or blocking web playback (CORS) — try another.");
+          nowbar.classList.remove("live");
+        }
+      });
+    } else {
+      video.src=ch.url; video.play().catch(function(){});
+    }
+  }
+
+  var FALLBACK="data:image/svg+xml;utf8,"+encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23888"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>'
+  );
+
+  function load(){
+    fetch(PLAYLIST).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.text(); })
+    .then(function(text){
+      channels=parseM3U(text);
+      loadingEl.remove();
+      buildGroups();
+      applyFilter();
+    })
+    .catch(function(err){
+      listEl.textContent="";
+      var e=document.createElement("div"); e.className="hint";
+      e.textContent="Couldn't load the playlist ("+err.message+"). Check your connection and reload.";
+      listEl.appendChild(e);
+    });
+  }
+
+  var t;
+  searchEl.addEventListener("input",function(){ clearTimeout(t); t=setTimeout(applyFilter,120); });
+  groupEl.addEventListener("change",applyFilter);
+  load();
+})();
+</script>
+</body>
+</html>
