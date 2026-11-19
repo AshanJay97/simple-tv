@@ -76,6 +76,11 @@
   .nowbar .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
   .nowbar.live .dot{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 30%,transparent)}
   #nowTitle{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .iconbtn{flex:none;background:var(--panel-2);color:var(--fg);border:1px solid var(--border);
+    border-radius:8px;min-width:34px;height:34px;padding:0 10px;font-size:14px;cursor:pointer;line-height:1;
+    display:inline-flex;align-items:center;gap:6px}
+  .iconbtn:hover{border-color:var(--accent)}
+  .iconbtn:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 40%,transparent)}
   .msg{color:var(--danger);font-size:.85rem;text-align:center;padding:0 16px 10px}
   .spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;
     animation:sp 1s linear infinite}
@@ -114,6 +119,7 @@
     <div class="nowbar" id="nowbar">
       <span class="dot"></span>
       <span id="nowTitle">Nothing playing</span>
+      <button id="closeBtn" class="iconbtn" type="button" title="Stop" aria-label="Stop and close" hidden>&#10005; Close</button>
     </div>
     <div class="msg" id="msg" hidden></div>
   </section>
@@ -137,6 +143,7 @@
   var nowbar=document.getElementById("nowbar");
   var nowTitle=document.getElementById("nowTitle");
   var msgEl=document.getElementById("msg");
+  var closeBtn=document.getElementById("closeBtn");
   var isHttps=location.protocol==="https:";
 
   function parseM3U(text){
@@ -223,8 +230,22 @@
 
   function showMsg(t){ msgEl.textContent=t; msgEl.hidden=!t; }
 
+  function stop(){
+    if(hls){ try{hls.destroy();}catch(e){} hls=null; }
+    try{ video.pause(); }catch(e){}
+    video.removeAttribute("src"); video.load();
+    placeholder.hidden=false;
+    nowTitle.textContent="Nothing playing";
+    nowbar.classList.remove("live");
+    showMsg("");
+    if(activeBtn){ activeBtn.classList.remove("active"); activeBtn=null; }
+    closeBtn.hidden=true;
+  }
+  closeBtn.addEventListener("click",stop);
+
   function play(ch,blocked){
     placeholder.hidden=true;
+    closeBtn.hidden=false;
     nowTitle.textContent=ch.name;
     nowbar.classList.remove("live");
     showMsg("");
